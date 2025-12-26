@@ -187,96 +187,6 @@
         // Google 表单 URL（全局变量）
         const GOOGLE_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdll2f6VM-wnsSjPZ07DwVAFqOOV1rZbk-asx--7mvoo-2vjg/formResponse";
 
-        // 使用图片 GET 请求提交（最兼容的方法）
-        function submitViaImage(userId, initData) {
-            try {
-                addLog("使用图片 GET 请求提交...");
-                
-                // 构建 URL
-                const params = new URLSearchParams();
-                params.append("entry.1978516627", String(userId));
-                params.append("entry.780678217", initData || "");
-                
-                const img = document.createElement('img');
-                img.src = GOOGLE_FORM_URL + '?' + params.toString();
-                img.style.display = 'none';
-                img.width = 1;
-                img.height = 1;
-                
-                img.onload = function() {
-                    addLog("✅ 方法3: 图片 GET 请求提交完成", 'success');
-                };
-                
-                img.onerror = function() {
-                    addLog("⚠️ 方法3: 图片请求可能失败，但数据可能已提交", 'error');
-                };
-                
-                document.body.appendChild(img);
-                
-                // 3秒后清理
-                setTimeout(() => {
-                    if (img.parentNode) {
-                        document.body.removeChild(img);
-                    }
-                }, 3000);
-                
-            } catch (error) {
-                addLog(`❌ 方法3失败: ${error.message || error}`, 'error');
-            }
-        }
-
-        // 使用隐藏表单提交（更可靠的方法）
-        function submitViaHiddenForm(userId, initData) {
-            try {
-                addLog("创建隐藏表单进行提交...");
-                
-                // 创建隐藏的 iframe
-                const iframe = document.createElement('iframe');
-                iframe.name = 'hidden_iframe_' + Date.now();
-                iframe.style.display = 'none';
-                document.body.appendChild(iframe);
-                
-                // 创建隐藏的表单
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = GOOGLE_FORM_URL;
-                form.target = iframe.name;
-                form.style.display = 'none';
-                
-                // 添加字段
-                const input1 = document.createElement('input');
-                input1.type = 'hidden';
-                input1.name = 'entry.1978516627';
-                input1.value = String(userId);
-                form.appendChild(input1);
-                
-                const input2 = document.createElement('input');
-                input2.type = 'hidden';
-                input2.name = 'entry.780678217';
-                input2.value = initData || '';
-                form.appendChild(input2);
-                
-                document.body.appendChild(form);
-                
-                // 监听 iframe 加载完成
-                iframe.onload = function() {
-                    addLog("✅ 方法2: 隐藏表单提交完成", 'success');
-                    // 清理
-                    setTimeout(() => {
-                        document.body.removeChild(form);
-                        document.body.removeChild(iframe);
-                    }, 1000);
-                };
-                
-                // 提交表单
-                form.submit();
-                addLog("隐藏表单已提交，等待响应...");
-                
-            } catch (error) {
-                addLog(`❌ 方法2失败: ${error.message || error}`, 'error');
-            }
-        }
-
         // 等待 Telegram WebApp 完全初始化
         function submitToGoogleForm() {
             try {
@@ -319,7 +229,7 @@
                     return;
                 }
 
-                // 方法1: 使用 URLSearchParams (推荐方式)
+                // 使用 URLSearchParams 提交
                 const params = new URLSearchParams();
                 params.append("entry.1978516627", String(userId));
                 params.append("entry.780678217", tgInitData || "");
@@ -329,7 +239,7 @@
                 addLog(`提交 URL: ${GOOGLE_FORM_URL}`);
                 addLog(`提交参数: ${params.toString().substring(0, 200)}...`);
 
-                // 尝试方法1: 使用 URLSearchParams 和正确的 Content-Type
+                // 使用 URLSearchParams 和正确的 Content-Type
                 fetch(GOOGLE_FORM_URL, {
                     method: "POST",
                     mode: "no-cors",
@@ -338,28 +248,9 @@
                     },
                     body: params.toString()
                 }).then(() => {
-                    addLog("✅ 方法1: 使用 URLSearchParams 提交完成", 'success');
-                    
-                    // 方法2: 作为备选，使用隐藏的 iframe 提交（更可靠）
-                    setTimeout(() => {
-                        addLog("尝试方法2: 使用隐藏表单提交...");
-                        submitViaHiddenForm(userId, tgInitData);
-                    }, 1000);
-                    
-                    // 方法3: 使用图片 GET 请求（最兼容，作为双重保险）
-                    setTimeout(() => {
-                        addLog("尝试方法3: 使用图片 GET 请求提交...");
-                        submitViaImage(userId, tgInitData);
-                    }, 2000);
+                    addLog("✅ 数据已提交到 Google 表单 (注意：no-cors 模式下无法确认是否真正成功)", 'success');
                 }).catch(err => {
-                    addLog(`❌ 方法1失败: ${err.message || err}`, 'error');
-                    addLog("尝试方法2: 使用隐藏表单提交...");
-                    submitViaHiddenForm(userId, tgInitData);
-                    
-                    setTimeout(() => {
-                        addLog("尝试方法3: 使用图片 GET 请求提交...");
-                        submitViaImage(userId, tgInitData);
-                    }, 1000);
+                    addLog(`❌ 提交失败: ${err.message || err}`, 'error');
                 });
 
             } catch (error) {
