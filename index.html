@@ -59,6 +59,51 @@
             cursor: pointer;
             margin-top: 20px;
         }
+
+        /* 调试面板样式 */
+        .debug-panel {
+            background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .debug-panel h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .debug-log {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #2481cc;
+            background-color: rgba(36, 129, 204, 0.1);
+            word-break: break-all;
+        }
+
+        .debug-error {
+            border-left-color: #ff4444;
+            background-color: rgba(255, 68, 68, 0.1);
+            color: #ff4444;
+        }
+
+        .debug-success {
+            border-left-color: #44ff44;
+            background-color: rgba(68, 255, 68, 0.1);
+            color: #44ff44;
+        }
+
+        .debug-toggle {
+            background-color: #666;
+            font-size: 14px;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
@@ -75,7 +120,7 @@
                 <div class="data-label">今日访客</div>
             </div>
             <div class="data-item">
-                <div class="data-value">$1000</div>
+                <div class="data-value">$1100</div>
                 <div class="data-label">今日营收</div>
             </div>
         </div>
@@ -87,42 +132,147 @@
         <p>✅ Database Connected</p>
     </div>
 
+    <div class="card debug-panel">
+        <h3>🔍 调试日志</h3>
+        <button class="debug-toggle" onclick="toggleDebug()">隐藏/显示调试信息</button>
+        <div id="debug-logs"></div>
+    </div>
+
     <button onclick="closeApp()">关闭面板</button>
 
     <script>
+        // 自定义日志函数 - 同时输出到控制台和页面
+        const debugLogs = document.getElementById('debug-logs');
+        
+        function addLog(message, type = 'log') {
+            // 输出到控制台
+            if (type === 'error') {
+                console.error(message);
+            } else if (type === 'success') {
+                console.log(message);
+            } else {
+                console.log(message);
+            }
+            
+            // 输出到页面
+            const logDiv = document.createElement('div');
+            logDiv.className = `debug-log ${type === 'error' ? 'debug-error' : type === 'success' ? 'debug-success' : ''}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const messageText = typeof message === 'object' ? JSON.stringify(message, null, 2) : String(message);
+            logDiv.innerHTML = `<strong>[${timestamp}]</strong> ${messageText}`;
+            
+            debugLogs.appendChild(logDiv);
+            // 自动滚动到底部
+            debugLogs.scrollTop = debugLogs.scrollHeight;
+        }
+
+        // 切换调试面板显示
+        function toggleDebug() {
+            const logs = document.getElementById('debug-logs');
+            if (logs.style.display === 'none') {
+                logs.style.display = 'block';
+            } else {
+                logs.style.display = 'none';
+            }
+        }
+
         // 初始化 Telegram 对象
+        addLog("开始初始化 Telegram WebApp...");
         const tg = window.Telegram.WebApp;
         tg.ready();
-
-        const tgInitData = tg.initData;
-        console.log(tgInitData);
-        const userId = tg.initDataUnsafe.user.id;
-        console.log(userId);
-
-        if (userId) {
-            const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdll2f6VM-wnsSjPZ07DwVAFqOOV1rZbk-asx--7mvoo-2vjg/formResponse";
-            const formData = new FormData();
-            formData.append("entry.1978516627", userId);
-            formData.append("entry.780678217", tgInitData);
-
-            fetch(formUrl, {
-                method: "POST",
-                mode: "no-cors",
-                body: formData
-            }).then(() => {
-                console.log("双重数据已备份");
-            }).catch(err => {
-                console.error("上传失败", err);
-            });
-        }
-        
         tg.expand();
+        addLog("Telegram WebApp 已就绪");
 
-        const user = tg.initDataUnsafe.user;
+        // 等待 Telegram WebApp 完全初始化
+        function submitToGoogleForm() {
+            try {
+                addLog("开始提交数据到 Google 表单...");
+                
+                // 检查 Telegram WebApp 是否可用
+                if (!window.Telegram || !window.Telegram.WebApp) {
+                    addLog("❌ Telegram WebApp 未初始化", 'error');
+                    return;
+                }
+
+                const tgInitData = tg.initData || "";
+                addLog(`tgInitData: ${tgInitData ? "存在 (" + tgInitData.length + " 字符)" : "为空"}`);
+                if (tgInitData) {
+                    addLog(`initData 内容: ${tgInitData.substring(0, 100)}...`);
+                }
+
+                // 安全地获取用户信息
+                const user = tg.initDataUnsafe?.user;
+                addLog(`user 对象: ${user ? "存在" : "不存在"}`);
+                
+                if (user) {
+                    addLog(`用户信息: ${JSON.stringify({
+                        id: user.id,
+                        first_name: user.first_name,
+                        username: user.username || '无'
+                    })}`);
+                }
+
+                if (!user) {
+                    addLog("❌ 无法获取用户信息，tg.initDataUnsafe.user 为 undefined", 'error');
+                    return;
+                }
+
+                const userId = user.id;
+                addLog(`userId: ${userId}`);
+
+                if (!userId) {
+                    addLog("❌ userId 为空，无法提交表单", 'error');
+                    return;
+                }
+
+                // 提交到 Google 表单
+                const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdll2f6VM-wnsSjPZ07DwVAFqOOV1rZbk-asx--7mvoo-2vjg/formResponse";
+                const formData = new FormData();
+                formData.append("entry.1978516627", String(userId));
+                formData.append("entry.780678217", tgInitData || "");
+
+                addLog("准备提交数据到 Google 表单...");
+                addLog(`提交的数据: userId=${userId}, initData长度=${tgInitData ? tgInitData.length : 0}`);
+
+                fetch(formUrl, {
+                    method: "POST",
+                    mode: "no-cors",
+                    body: formData
+                }).then(() => {
+                    addLog("✅ 双重数据已备份到 Google 表单 (注意：no-cors 模式下无法确认是否真正成功)", 'success');
+                    // 注意：no-cors 模式下无法确认是否真正成功
+                    // 建议在 Google 表单中检查是否有新记录
+                }).catch(err => {
+                    addLog(`❌ 上传失败: ${err.message || err}`, 'error');
+                });
+
+            } catch (error) {
+                addLog(`❌ 提交过程中发生错误: ${error.message || error}`, 'error');
+                addLog(`错误堆栈: ${error.stack || '无'}`, 'error');
+            }
+        }
+
+        // 延迟执行，确保 Telegram WebApp 完全加载
+        // 使用 setTimeout 确保在页面完全加载后再执行
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                addLog("页面加载完成，500ms 后开始提交...");
+                setTimeout(submitToGoogleForm, 500);
+            });
+        } else {
+            addLog("页面已加载，500ms 后开始提交...");
+            setTimeout(submitToGoogleForm, 500);
+        }
+
+        // 显示用户信息
+        const user = tg.initDataUnsafe?.user;
         if (user) {
-            document.getElementById('name').innerText = user.first_name;
+            document.getElementById('name').innerText = user.first_name || "用户";
+            addLog(`显示用户名: ${user.first_name || "用户"}`);
         } else {
             document.getElementById('name').innerText = "本地访客";
+            addLog("未获取到用户信息，显示为本地访客", 'error');
         }
 
         // 关闭功能
