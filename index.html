@@ -110,6 +110,7 @@
 
     <div id="user-info">
         <h2>👋 你好, <span id="name">加载中...</span></h2>
+        <p style="margin-top: 5px; font-size: 14px; opacity: 0.7;">Telegram ID: <span id="user-id">加载中...</span></p>
     </div>
 
     <div class="card">
@@ -209,6 +210,7 @@
                 addLog(`user 对象: ${user ? "存在" : "不存在"}`);
                 
                 if (user) {
+                    addLog(`📱 Telegram ID: ${user.id || "未知"}`);
                     addLog(`用户信息: ${JSON.stringify({
                         id: user.id,
                         first_name: user.first_name,
@@ -275,10 +277,19 @@
         const user = tg.initDataUnsafe?.user;
         if (user) {
             document.getElementById('name').innerText = user.first_name || "用户";
+            if (user.id) {
+                document.getElementById('user-id').innerText = user.id;
+                addLog(`📱 Telegram ID: ${user.id}`);
+            } else {
+                document.getElementById('user-id').innerText = "未知";
+                addLog("⚠️ Telegram ID: 未知", 'error');
+            }
             addLog(`显示用户名: ${user.first_name || "用户"}`);
         } else {
             document.getElementById('name').innerText = "本地访客";
-            addLog("未获取到用户信息，显示为本地访客", 'error');
+            document.getElementById('user-id').innerText = "未获取";
+            addLog("❌ 未获取到用户信息，显示为本地访客", 'error');
+            addLog("❌ Telegram ID: 未获取", 'error');
         }
 
         // 关闭功能
