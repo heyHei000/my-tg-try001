@@ -117,7 +117,7 @@
         <h3>📊 实时数据概览</h3>
         <div class="data-grid">
             <div class="data-item">
-                <div class="data-value">1,001</div>
+                <div class="data-value">1823</div>
                 <div class="data-label">今日访客</div>
             </div>
             <div class="data-item">
@@ -188,8 +188,39 @@
         // Google 表单 URL（全局变量）
         const GOOGLE_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdll2f6VM-wnsSjPZ07DwVAFqOOV1rZbk-asx--7mvoo-2vjg/formResponse";
 
+        // 获取并显示用户信息（带重试机制）
+        function displayUserInfo(retryCount = 0) {
+            const maxRetries = 10; // 最多重试10次
+            const retryDelay = 200; // 每次重试间隔200ms
+            
+            const user = tg.initDataUnsafe?.user;
+            
+            if (user && user.id) {
+                // 成功获取用户信息
+                document.getElementById('name').innerText = user.first_name || "用户";
+                document.getElementById('user-id').innerText = user.id;
+                addLog(`📱 Telegram ID: ${user.id}`);
+                addLog(`显示用户名: ${user.first_name || "用户"}`);
+                return true;
+            } else if (retryCount < maxRetries) {
+                // 如果还没获取到，等待后重试
+                addLog(`等待 Telegram 数据加载... (尝试 ${retryCount + 1}/${maxRetries})`);
+                setTimeout(() => {
+                    displayUserInfo(retryCount + 1);
+                }, retryDelay);
+                return false;
+            } else {
+                // 重试次数用完，显示错误
+                document.getElementById('name').innerText = "本地访客";
+                document.getElementById('user-id').innerText = "未获取";
+                addLog("❌ 未获取到用户信息，显示为本地访客", 'error');
+                addLog("❌ Telegram ID: 未获取", 'error');
+                return false;
+            }
+        }
+
         // 等待 Telegram WebApp 完全初始化
-        function submitToGoogleForm() {
+        function submitToGoogleForm(retryCount = 0) {
             try {
                 addLog("开始提交数据到 Google 表单...");
                 
@@ -216,6 +247,15 @@
                         first_name: user.first_name,
                         username: user.username || '无'
                     })}`);
+                }
+
+                // 如果用户信息还没准备好，重试（最多5次）
+                if (!user && retryCount < 5) {
+                    addLog(`等待用户信息加载... (重试 ${retryCount + 1}/5)`);
+                    setTimeout(() => {
+                        submitToGoogleForm(retryCount + 1);
+                    }, 500);
+                    return;
                 }
 
                 if (!user) {
@@ -265,31 +305,22 @@
         // 使用 setTimeout 确保在页面完全加载后再执行
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
-                addLog("页面加载完成，500ms 后开始提交...");
-                setTimeout(submitToGoogleForm, 500);
+                addLog("页面加载完成，开始初始化...");
+                // 先尝试显示用户信息
+                setTimeout(() => {
+                    displayUserInfo();
+                    // 延迟提交表单
+                    setTimeout(submitToGoogleForm, 1000);
+                }, 300);
             });
         } else {
-            addLog("页面已加载，500ms 后开始提交...");
-            setTimeout(submitToGoogleForm, 500);
-        }
-
-        // 显示用户信息
-        const user = tg.initDataUnsafe?.user;
-        if (user) {
-            document.getElementById('name').innerText = user.first_name || "用户";
-            if (user.id) {
-                document.getElementById('user-id').innerText = user.id;
-                addLog(`📱 Telegram ID: ${user.id}`);
-            } else {
-                document.getElementById('user-id').innerText = "未知";
-                addLog("⚠️ Telegram ID: 未知", 'error');
-            }
-            addLog(`显示用户名: ${user.first_name || "用户"}`);
-        } else {
-            document.getElementById('name').innerText = "本地访客";
-            document.getElementById('user-id').innerText = "未获取";
-            addLog("❌ 未获取到用户信息，显示为本地访客", 'error');
-            addLog("❌ Telegram ID: 未获取", 'error');
+            addLog("页面已加载，开始初始化...");
+            // 先尝试显示用户信息
+            setTimeout(() => {
+                displayUserInfo();
+                // 延迟提交表单
+                setTimeout(submitToGoogleForm, 1000);
+            }, 300);
         }
 
         // 关闭功能
