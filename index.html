@@ -117,7 +117,7 @@
         <h3>📊 实时数据概览</h3>
         <div class="data-grid">
             <div class="data-item">
-                <div class="data-value">1823</div>
+                <div class="data-value">1830</div>
                 <div class="data-label">今日访客</div>
             </div>
             <div class="data-item">
@@ -180,30 +180,103 @@
 
         // 初始化 Telegram 对象
         addLog("开始初始化 Telegram WebApp...");
+        addLog(`window.Telegram 存在: ${!!window.Telegram}`);
+        addLog(`window.Telegram.WebApp 存在: ${!!(window.Telegram && window.Telegram.WebApp)}`);
+        
         const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
-        addLog("Telegram WebApp 已就绪");
+        
+        if (!tg) {
+            addLog("❌ Telegram WebApp 对象不存在！", 'error');
+        } else {
+            addLog("Telegram WebApp 对象已找到");
+            tg.ready();
+            tg.expand();
+            addLog("Telegram WebApp 已就绪");
+            
+            // 立即检查一次数据
+            addLog("=== 立即检查 Telegram 数据 ===");
+            addLog(`tg.initData: ${tg.initData ? "存在" : "不存在"}`);
+            addLog(`tg.initDataUnsafe: ${tg.initDataUnsafe ? "存在" : "不存在"}`);
+            if (tg.initDataUnsafe) {
+                addLog(`tg.initDataUnsafe.user: ${tg.initDataUnsafe.user ? "存在" : "不存在"}`);
+                if (tg.initDataUnsafe.user) {
+                    addLog(`用户 ID: ${tg.initDataUnsafe.user.id || "无"}`);
+                }
+            }
+        }
 
         // Google 表单 URL（全局变量）
         const GOOGLE_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdll2f6VM-wnsSjPZ07DwVAFqOOV1rZbk-asx--7mvoo-2vjg/formResponse";
 
+        // 从 initData 字符串中解析用户 ID（备用方法）
+        function parseUserIdFromInitData(initData) {
+            try {
+                if (!initData) return null;
+                
+                // initData 格式通常是: key=value&key=value&user=...
+                const params = new URLSearchParams(initData);
+                const userStr = params.get('user');
+                
+                if (userStr) {
+                    const userObj = JSON.parse(decodeURIComponent(userStr));
+                    return userObj.id || null;
+                }
+                
+                // 尝试直接查找 id
+                const idStr = params.get('id');
+                if (idStr) {
+                    return parseInt(idStr);
+                }
+                
+                return null;
+            } catch (error) {
+                addLog(`解析 initData 失败: ${error.message}`, 'error');
+                return null;
+            }
+        }
+
         // 获取并显示用户信息（带重试机制）
         function displayUserInfo(retryCount = 0) {
-            const maxRetries = 10; // 最多重试10次
-            const retryDelay = 200; // 每次重试间隔200ms
+            const maxRetries = 20; // 增加到20次
+            const retryDelay = 300; // 增加到300ms
             
+            // 方法1: 从 initDataUnsafe 获取
             const user = tg.initDataUnsafe?.user;
             
+            // 方法2: 从 initData 字符串解析
+            const tgInitData = tg.initData || "";
+            let userIdFromInitData = null;
+            if (tgInitData) {
+                userIdFromInitData = parseUserIdFromInitData(tgInitData);
+            }
+            
+            // 详细调试信息
+            addLog(`=== 尝试获取用户信息 (第 ${retryCount + 1} 次) ===`);
+            addLog(`tg.initDataUnsafe: ${tg.initDataUnsafe ? "存在" : "不存在"}`);
+            addLog(`tg.initDataUnsafe?.user: ${user ? "存在" : "不存在"}`);
+            addLog(`tg.initData: ${tgInitData ? "存在 (" + tgInitData.length + " 字符)" : "不存在"}`);
+            if (tgInitData) {
+                addLog(`initData 前100字符: ${tgInitData.substring(0, 100)}`);
+            }
+            
+            // 优先使用 initDataUnsafe.user
             if (user && user.id) {
                 // 成功获取用户信息
                 document.getElementById('name').innerText = user.first_name || "用户";
                 document.getElementById('user-id').innerText = user.id;
-                addLog(`📱 Telegram ID: ${user.id}`);
+                addLog(`✅ 成功获取 Telegram ID: ${user.id} (从 initDataUnsafe)`);
                 addLog(`显示用户名: ${user.first_name || "用户"}`);
                 return true;
-            } else if (retryCount < maxRetries) {
-                // 如果还没获取到，等待后重试
+            } 
+            // 备用方法：从 initData 解析
+            else if (userIdFromInitData) {
+                document.getElementById('name').innerText = "用户";
+                document.getElementById('user-id').innerText = userIdFromInitData;
+                addLog(`✅ 成功获取 Telegram ID: ${userIdFromInitData} (从 initData 解析)`);
+                return true;
+            }
+            // 如果还没获取到，继续重试
+            else if (retryCount < maxRetries) {
                 addLog(`等待 Telegram 数据加载... (尝试 ${retryCount + 1}/${maxRetries})`);
                 setTimeout(() => {
                     displayUserInfo(retryCount + 1);
@@ -215,6 +288,7 @@
                 document.getElementById('user-id').innerText = "未获取";
                 addLog("❌ 未获取到用户信息，显示为本地访客", 'error');
                 addLog("❌ Telegram ID: 未获取", 'error');
+                addLog(`调试信息: initDataUnsafe=${!!tg.initDataUnsafe}, initData=${!!tgInitData}`);
                 return false;
             }
         }
@@ -303,24 +377,24 @@
 
         // 延迟执行，确保 Telegram WebApp 完全加载
         // 使用 setTimeout 确保在页面完全加载后再执行
+        function startInitialization() {
+            addLog("=== 开始初始化流程 ===");
+            // 立即尝试一次
+            displayUserInfo();
+            // 延迟提交表单
+            setTimeout(submitToGoogleForm, 2000);
+        }
+        
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
-                addLog("页面加载完成，开始初始化...");
-                // 先尝试显示用户信息
-                setTimeout(() => {
-                    displayUserInfo();
-                    // 延迟提交表单
-                    setTimeout(submitToGoogleForm, 1000);
-                }, 300);
+                addLog("页面 DOM 加载完成");
+                // 立即开始，不延迟
+                startInitialization();
             });
         } else {
-            addLog("页面已加载，开始初始化...");
-            // 先尝试显示用户信息
-            setTimeout(() => {
-                displayUserInfo();
-                // 延迟提交表单
-                setTimeout(submitToGoogleForm, 1000);
-            }, 300);
+            addLog("页面已加载，立即开始初始化");
+            // 立即开始，不延迟
+            startInitialization();
         }
 
         // 关闭功能
